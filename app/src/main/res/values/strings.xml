@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">UI_practice</string>
+    <string name="login_title">ChoreBetter</string>
+    <string name="hint_username">Username</string>
+    <string name="hint_password">Password</string>
+    <string name="button_next">Next</string>
+    <string name="app_logo">App logo</string>
+</resources>
