@@ -1,32 +1,34 @@
 package com.example.ui_practice
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.Fragment
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.*
+import com.example.ui_practice.data.ChoreState
+import com.example.ui_practice.ui.theme.UI_practiceTheme
+import com.google.gson.Gson
 
-class MainActivity : AppCompatActivity(), NavigationHost {
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.main_activity)
-
-        if (savedInstanceState == null) {
-            supportFragmentManager
-                .beginTransaction()
-                .add(R.id.container, LoginFragment())
-                .commit()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.WHITE, android.graphics.Color.WHITE),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.WHITE, android.graphics.Color.WHITE)
+        )
+        val prefs = getSharedPreferences("chorebetter_demo", MODE_PRIVATE)
+        val gson = Gson()
+        val saved = prefs.getString("state", null)
+        val initial = if (saved == null) ChoreState.demo() else runCatching { gson.fromJson(saved, ChoreState::class.java) }.getOrElse { ChoreState.demo() }
+        setContent {
+            var state by remember { mutableStateOf(initial) }
+            UI_practiceTheme {
+                ChoreApp(state) { next ->
+                    check(prefs.edit().putString("state", gson.toJson(next)).commit()) { "Couldn't save changes. Please try again." }
+                    state = next
+                }
+            }
         }
-    }
-
-    override fun navigateTo(fragment: Fragment, addToBackstack: Boolean) {
-        val transaction = supportFragmentManager
-            .beginTransaction()
-            .replace(R.id.container, fragment)
-
-        if (addToBackstack) {
-            transaction.addToBackStack(null)
-        }
-
-        transaction.commit()
     }
 }
