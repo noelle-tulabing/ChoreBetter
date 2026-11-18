@@ -61,6 +61,28 @@ class ChoreFrontendTest {
         compose.onNodeWithContentDescription("Complete Feed the dog").performTouchInput { click(center) }
         compose.onNodeWithTag("balance").assertTextEquals("10 points")
     }
+    @Test fun managerEditsChoreAndMemberCannotSeeEditControls() {
+        launch()
+        compose.onNodeWithTag("edit-dog").performClick()
+        compose.onNodeWithTag("entryName").assertTextContains("Feed the dog")
+        compose.onNodeWithTag("entryName").performTextReplacement("Walk the dog")
+        compose.onNodeWithTag("entryPoints").performTextReplacement("25")
+        compose.onNodeWithTag("saveEntry").performClick()
+        compose.onNodeWithText("Walk the dog").assertExists()
+        compose.onNodeWithTag("complete-dog").performTouchInput { click(center) }
+        compose.onNodeWithTag("balance").assertTextEquals("25 points")
+        compose.onNodeWithContentDescription("Profile").performClick()
+        compose.onNodeWithText("Noelle").performClick()
+        compose.onNodeWithTag("edit-dishes").assertDoesNotExist()
+    }
+    @Test fun cancelEditLeavesChoreUnchanged() {
+        launch()
+        compose.onNodeWithTag("edit-dog").performClick()
+        compose.onNodeWithTag("entryName").performTextReplacement("Changed")
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Feed the dog").assertExists()
+        compose.onNodeWithText("Changed").assertDoesNotExist()
+    }
     @Test fun createChoreValidatesNameAndDisplaysSavedChore() {
         launch()
         compose.onNodeWithTag("addChore").performClick()

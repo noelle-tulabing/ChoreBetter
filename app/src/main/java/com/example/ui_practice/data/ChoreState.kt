@@ -16,7 +16,7 @@ enum class Frequency(val label: String, val days: Int) { NONE("Not scheduled", 0
 data class Person(val id: String, val name: String, val manager: Boolean = false, val points: Int = 0, val streak: Int = 0, val lastActive: Long? = null)
 data class ChoreList(val id: String, val name: String, val owner: String, val members: Set<String>)
 data class Chore(val id: String, val listId: String, val title: String, val assignee: String?, val frequency: Frequency, val points: Int, val startDay: Long)
-data class Completion(val choreId: String, val day: Long, val userId: String, val earned: Int)
+data class Completion(val choreId: String, val day: Long, val userId: String, val earned: Int, val bonus: Int? = null)
 data class Reward(val id: String, val listId: String, val title: String, val cost: Int, val screenMinutes: Int = 0)
 data class Redemption(val id: String, val rewardId: String, val userId: String, val title: String, val cost: Int, val screenMinutes: Int)
 data class ChoreState(
@@ -32,7 +32,7 @@ data class ChoreState(
         return chores.filter { it.listId == listId }
     }
     fun scheduled(user: String, listId: String, day: Long) = visibleChores(user, listId).filter {
-        it.frequency != Frequency.NONE && it.assignee != null && day >= it.startDay && (day - it.startDay) % it.frequency.days == 0L
+        isDone(it.id, day) || (it.frequency != Frequency.NONE && it.assignee != null && day >= it.startDay && (day - it.startDay) % it.frequency.days == 0L)
     }
     fun isDone(choreId: String, day: Long) = completions.any { it.choreId == choreId && it.day == day }
     fun createList(user: String, name: String): ChoreState {
@@ -45,12 +45,22 @@ data class ChoreState(
         require(people.any { it.id == member }) { "That member doesn't exist." }
         return copy(lists = lists.map { if (it.id == listId) it.copy(members = it.members + member) else it })
     }
-    fun addChore(user: String, listId: String, title: String, assignee: String?, frequency: Frequency, points: Int, day: Long): ChoreState {
+    private fun validateChore(user: String, listId: String, title: String, assignee: String?, points: Int) {
         require(canManage(user, listId)) { "Only the list manager can add chores." }
         require(title.trim().length in 1..80) { "Enter a chore name (1–80 characters)." }
         require(points in 1..10000) { "Points must be between 1 and 10,000." }
         require(assignee == null || (people.any { it.id == assignee } && canView(assignee, listId))) { "Share the list with this member first." }
+    }
+    fun addChore(user: String, listId: String, title: String, assignee: String?, frequency: Frequency, points: Int, day: Long): ChoreState {
+        validateChore(user, listId, title, assignee, points)
         return copy(chores = chores + Chore(UUID.randomUUID().toString(), listId, title.trim(), assignee, frequency, points, day))
+    }
+    fun editChore(user: String, choreId: String, title: String, assignee: String?, frequency: Frequency, points: Int): ChoreState {
+        val chore = chores.firstOrNull { it.id == choreId } ?: error("Chore not found.")
+        validateChore(user, chore.listId, title, assignee, points)
+        return copy(chores = chores.map {
+            if (it.id == choreId) it.copy(title = title.trim(), assignee = assignee, frequency = frequency, points = points) else it
+        })
     }
     fun complete(user: String, choreId: String, day: Long, currentDay: Long): ChoreState {
         val chore = chores.firstOrNull { it.id == choreId } ?: error("Chore not found.")
@@ -64,20 +74,27 @@ data class ChoreState(
         val earned = chore.points + if (continued) 5 else 0
         return copy(
             people = people.map { if (it.id == user) it.copy(points = Math.addExact(it.points, earned), streak = streak, lastActive = day) else it },
-            completions = completions + Completion(choreId, day, user, earned)
+            completions = completions + Completion(choreId, day, user, earned, if (continued) 5 else 0)
         )
+    }
+    private fun completionBonus(completion: Completion): Int = completion.bonus ?: run {
+        // Older saved completions predate the explicit bonus field.
+        if (completions.firstOrNull { it.userId == completion.userId && it.day == completion.day } == completion &&
+            completions.any { it.userId == completion.userId && it.day == completion.day - 1 }) 5 else 0
     }
     fun uncomplete(user: String, choreId: String, day: Long, currentDay: Long): ChoreState {
         val chore = chores.firstOrNull { it.id == choreId } ?: error("Chore not found.")
-        require(canView(user, chore.listId) && chore.assignee == user) { "You can only uncheck your own chores." }
+        require(canView(user, chore.listId)) { "This list is not shared with you." }
+        require(completions.none { it.choreId == choreId && it.day == day && it.userId != user }) { "You can only uncheck your own chores." }
         require(day == currentDay) { "Only today's chores can be unchecked." }
         val removed = completions.firstOrNull { it.choreId == choreId && it.day == day && it.userId == user } ?: return this
         var remaining = completions - removed
         // Keep the day's bonus on another completion if the day is still active.
         val recipient = remaining.firstOrNull { it.userId == user && it.day == day }
-        val transferred = if (recipient != null) removed.earned - chore.points else 0
+        val bonus = completionBonus(removed)
+        val transferred = if (recipient != null) bonus else 0
         if (recipient != null && transferred > 0) {
-            remaining = remaining.map { if (it == recipient) it.copy(earned = it.earned + transferred) else it }
+            remaining = remaining.map { if (it == recipient) it.copy(earned = it.earned + transferred, bonus = completionBonus(it) + transferred) else it }
         }
         val deduction = removed.earned - transferred
         require(person(user).points >= deduction) { "Can't uncheck: these points have already been spent." }

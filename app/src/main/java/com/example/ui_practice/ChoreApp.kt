@@ -49,6 +49,7 @@ fun ChoreApp(state: ChoreState, save: (ChoreState) -> Unit) {
     var dialog by rememberSaveable { mutableStateOf("") }
     var mine by rememberSaveable { mutableStateOf(true) }
     var allChores by rememberSaveable { mutableStateOf(false) }
+    var editingId by rememberSaveable { mutableStateOf("") }
     var redeemId by rememberSaveable { mutableStateOf("") }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -103,7 +104,7 @@ fun ChoreApp(state: ChoreState, save: (ChoreState) -> Unit) {
                     FilterChip(selected = !mine, onClick = { mine = false }, label = { Text("Everyone") })
                     if (manager) FilterChip(selected = allChores, onClick = { allChores = !allChores }, label = { Text("All chores") })
                 }
-                val chores = active?.let { if (allChores) state.visibleChores(user, it.id) else state.scheduled(user, it.id, day) }.orEmpty().filter { !mine || it.assignee == user }
+                val chores = active?.let { if (allChores) state.visibleChores(user, it.id) else state.scheduled(user, it.id, day) }.orEmpty().filter { !mine || (state.completions.firstOrNull { c -> c.choreId == it.id && c.day == day }?.userId ?: it.assignee) == user }
                 LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("choreList"), contentPadding = PaddingValues(top = 12.dp, bottom = 100.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     if (chores.isEmpty()) item {
                         Column(Modifier.padding(vertical = 24.dp)) {
@@ -112,19 +113,21 @@ fun ChoreApp(state: ChoreState, save: (ChoreState) -> Unit) {
                         }
                     }
                     items(chores, key = { it.id }) { chore ->
-                        val done = state.isDone(chore.id, day)
+                        val completion = state.completions.firstOrNull { it.choreId == chore.id && it.day == day }
+                        val done = completion != null
+                        val actor = completion?.userId ?: chore.assignee
                         val scheduled = chore.frequency != Frequency.NONE && chore.assignee != null && day >= chore.startDay && (day - chore.startDay) % chore.frequency.days == 0L
                         Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
                             IconButton(onClick = {
-                                if (chore.assignee != user) {
-                                    message("Only ${chore.assignee?.let { state.person(it).name } ?: "the assigned member"} can complete this chore")
+                                if (actor != user) {
+                                    message("Only ${actor?.let { state.person(it).name } ?: "the assigned member"} can complete this chore")
                                     return@IconButton
                                 }
                                 if (day != today()) {
                                     message("Choose Today to complete a chore")
                                     return@IconButton
                                 }
-                                if (!scheduled) {
+                                if (!done && !scheduled) {
                                     message("This chore is not scheduled today")
                                     return@IconButton
                                 }
@@ -143,9 +146,10 @@ fun ChoreApp(state: ChoreState, save: (ChoreState) -> Unit) {
                             }
                             Column(Modifier.weight(1f)) {
                                 Text(chore.title, fontSize = 18.sp, modifier = Modifier.background(if (done) Color(0xFFE9E9E9) else Color(0xFFDDDDDD), RoundedCornerShape(28.dp)).padding(horizontal = 16.dp, vertical = 10.dp))
-                                val who = chore.assignee?.let { state.person(it).name } ?: "Unassigned"
-                                Text("$who · ${chore.frequency.label} · ${chore.points} pts" + if (done) " · Done" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
+                                val who = actor?.let { state.person(it).name } ?: "Unassigned"
+                                Text("$who · ${chore.frequency.label} · ${completion?.earned ?: chore.points} pts" + if (done) " · Done" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
                             }
+                            if (manager) TextButton(onClick = { editingId = chore.id; dialog = "editChore" }, modifier = Modifier.testTag("edit-${chore.id}")) { Text("Edit") }
                         }
                     }
                 }
@@ -213,6 +217,14 @@ fun ChoreApp(state: ChoreState, save: (ChoreState) -> Unit) {
             val error = change { state.addChore(user, active.id, name, assignee, freq, points, day) }
             if (error == null) { dialog = ""; if (assignee != user) mine = false; if (freq == Frequency.NONE || assignee == null) allChores = true; message("Chore added") }; error
         }
+        "editChore" -> state.chores.firstOrNull { it.id == editingId }?.let { existing ->
+            EntryDialog("Edit chore", "Save changes", chore = true, initialChore = existing,
+                members = state.people.filter { state.canView(it.id, existing.listId) }, onDismiss = { dialog = "" }) { name, points, assignee, freq, _ ->
+                val error = change { state.editChore(user, existing.id, name, assignee, freq, points) }
+                if (error == null) { dialog = ""; if (assignee != user) mine = false; if (freq == Frequency.NONE || assignee == null) allChores = true }
+                error
+            }
+        }
         "reward" -> if (active != null) EntryDialog("Add reward", "Add reward", reward = true, onDismiss = { dialog = "" }) { name, points, _, _, minutes ->
             val error = change { state.addReward(user, active.id, name, points, minutes) }; if (error == null) dialog = ""; error
         }
@@ -243,11 +255,11 @@ private fun RoundIcon(label: String, kind: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EntryDialog(title: String, action: String, chore: Boolean = false, reward: Boolean = false, members: List<Person> = emptyList(), onDismiss: () -> Unit, onSave: (String, Int, String?, Frequency, Int) -> String?) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var points by rememberSaveable { mutableStateOf(if (reward) "20" else "10") }
-    var assignee by rememberSaveable { mutableStateOf(members.firstOrNull()?.id) }
-    var frequency by rememberSaveable { mutableStateOf(Frequency.DAILY) }
+private fun EntryDialog(title: String, action: String, chore: Boolean = false, reward: Boolean = false, initialChore: Chore? = null, members: List<Person> = emptyList(), onDismiss: () -> Unit, onSave: (String, Int, String?, Frequency, Int) -> String?) {
+    var name by rememberSaveable { mutableStateOf(initialChore?.title ?: "") }
+    var points by rememberSaveable { mutableStateOf(initialChore?.points?.toString() ?: if (reward) "20" else "10") }
+    var assignee by rememberSaveable { mutableStateOf(if (initialChore != null) initialChore.assignee else members.firstOrNull()?.id) }
+    var frequency by rememberSaveable { mutableStateOf(initialChore?.frequency ?: Frequency.DAILY) }
     var minutes by rememberSaveable { mutableStateOf("0") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var memberMenu by remember { mutableStateOf(false) }

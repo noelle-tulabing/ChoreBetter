@@ -19,6 +19,7 @@ The Gradle wrapper uses Java 25 and downloads its toolchain. Set `sdk.dir` in th
 - Select a date and check off your own chores. Everyone can see completion; only the assignee can complete a chore, on its scheduled day.
 - Tap **+** to add a chore with an assignee, point value, and daily/weekly recurrence. The selected calendar date is the first occurrence.
 - Open the list selector to create an empty list or share it with an existing demo member. A new list is private to its creator.
+- Managers can tap **Edit** beside a chore to change its name, assignee, recurrence, or points. Completed occurrences retain their earned points; changes apply to subsequent completions. The recurrence start date stays unchanged.
 - **Mine** filters assigned chores. Managers can use **All chores** to see unscheduled and unassigned entries, which are excluded from the calendar.
 - Open the store to redeem rewards. Managers can add rewards. Redemption asks for confirmation, deducts points, and adds a history entry.
 - Lists, sharing, completions, points, streaks and redemptions persist across app restarts on this device.
@@ -29,7 +30,7 @@ This is a frontend demo, not an authenticated multi-device service. Switching pr
 
 Daily chores recur every day and weekly chores every seven days from the selected start date. Completion is recorded per occurrence and cannot award points twice. Tap a completed chore to uncheck today's occurrence: points are reversed and the streak is recalculated. If another chore keeps that day active, its streak bonus is preserved. Unchecking is blocked if the point deduction would make the balance negative after a redemption. One completion in a day increments the streak; continuing on the next calendar day adds **5 bonus points once that day**. Missing a day resets the streak. This policy fills a gap in the requirements, which specify a bonus without defining its amount or calculation.
 
-Screen-time rewards can be defined but **cannot be redeemed** until a real screen-time provider is connected. They never deduct points or claim to unlock a device. FR-10 and NFR-04 remain integration requirements; they are not implemented by this frontend. Account registration, network sync, push notifications, automatic fair assignment, and edit/delete flows are outside this increment. Chores are assigned manually when created.
+Screen-time rewards can be defined but **cannot be redeemed** until a real screen-time provider is connected. They never deduct points or claim to unlock a device. FR-10 and NFR-04 remain integration requirements; they are not implemented by this frontend. Account registration, network sync, push notifications, automatic fair assignment, and delete flows are outside this increment. Chores are assigned manually when created.
 
 The supplied wireframe is the visual reference; the Figma connector could not access the original file.
 

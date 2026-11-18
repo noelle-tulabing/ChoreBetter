@@ -162,6 +162,43 @@ class ChoreRequirementsTest {
         assertEquals(0, state.person("alex").points)
         assertTrue(state.isDone("trash", day))
     }
+    @Test fun managerCanEditAllChoreFieldsWithoutChangingIdentity() {
+        val before = demo()
+        val after = before.editChore("alex", "dog", "Walk the dog", "sam", Frequency.WEEKLY, 30)
+        val chore = after.chores.first { it.id == "dog" }
+        assertEquals(before.chores.size, after.chores.size)
+        assertEquals("Walk the dog", chore.title)
+        assertEquals("sam", chore.assignee)
+        assertEquals(30, chore.points)
+        assertEquals(day, chore.startDay)
+        assertEquals(Frequency.WEEKLY, chore.frequency)
+        assertFalse(after.scheduled("sam", "home", day + 1).any { it.id == "dog" })
+        assertTrue(after.scheduled("sam", "home", day + 7).any { it.id == "dog" })
+    }
+    @Test fun editsRequireManagerAndValidFields() {
+        rejected { demo().editChore("sam", "dog", "Walk", "sam", Frequency.DAILY, 10) }
+        rejected { demo().editChore("alex", "dog", " ", "alex", Frequency.DAILY, 10) }
+        rejected { demo().editChore("alex", "dog", "Walk", "alex", Frequency.DAILY, 0) }
+        rejected { demo().editChore("alex", "dog", "Walk", "missing", Frequency.DAILY, 10) }
+    }
+    @Test fun editedPointsDoNotChangePreviouslyEarnedPointsOrUndoAmount() {
+        var state = demo().complete("alex", "dog", day, day)
+        state = state.editChore("alex", "dog", "Walk", "sam", Frequency.NONE, 90)
+        assertEquals(10, state.person("alex").points)
+        assertTrue(state.scheduled("alex", "home", day).any { it.id == "dog" })
+        rejected { state.uncomplete("sam", "dog", day, day) }
+        state = state.uncomplete("alex", "dog", day, day)
+        assertEquals(0, state.person("alex").points)
+        assertFalse(state.scheduled("alex", "home", day).any { it.id == "dog" })
+    }
+    @Test fun editingCompletedChorePreservesBonusReversalIncludingOlderSavedData() {
+        var state = demo().complete("alex", "dog", day, day).complete("alex", "dog", day + 1, day + 1)
+        state = state.copy(completions = state.completions.map { it.copy(bonus = null) })
+        state = state.editChore("alex", "dog", "Walk", "alex", Frequency.DAILY, 100)
+        state = state.uncomplete("alex", "dog", day + 1, day + 1)
+        assertEquals(10, state.person("alex").points)
+        assertEquals(1, state.person("alex").streak)
+    }
     @Test fun localStorageRoundTripPreservesSharingCompletionAndWallet() {
         var state = demo().createList("alex", "Kitchen")
         state = state.share("alex", state.lists.last().id, "sam").complete("alex", "trash", day, day).redeem("alex", "dessert")
