@@ -15,3 +15,9 @@
 local.properties
 
 .kotlin/
+
+# Xcode
+DerivedData/
+xcuserdata/
+*.xcuserstate
+ios/build/
