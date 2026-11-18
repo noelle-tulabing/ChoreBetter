@@ -20,7 +20,7 @@ class ChoreFrontendTest {
         launch()
         compose.onNodeWithTag("complete-trash").performTouchInput { click(center) }
         compose.onNodeWithTag("balance").assertTextEquals("20 points")
-        compose.onNodeWithTag("complete-trash").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Uncheck Take out the trash").assertExists()
         compose.onNodeWithContentDescription("Rewards").performClick()
         compose.onNodeWithTag("redeem-movie").assertIsNotEnabled()
         compose.onNodeWithTag("redeem-dessert").performClick()
@@ -50,7 +50,16 @@ class ChoreFrontendTest {
         compose.onNodeWithTag("todayButton").performClick()
         compose.onNodeWithTag("complete-dog").performTouchInput { click(center) }
         compose.onNodeWithTag("balance").assertTextEquals("10 points")
-        compose.onNodeWithContentDescription("Feed the dog, completed").assertExists()
+        compose.onNodeWithContentDescription("Uncheck Feed the dog").assertExists()
+    }
+    @Test fun uncheckReversesPointsAndRecheckingDoesNotDuplicateThem() {
+        launch()
+        compose.onNodeWithTag("complete-dog").performTouchInput { click(center) }
+        compose.onNodeWithTag("balance").assertTextEquals("10 points")
+        compose.onNodeWithContentDescription("Uncheck Feed the dog").performTouchInput { click(center) }
+        compose.onNodeWithTag("balance").assertTextEquals("0 points")
+        compose.onNodeWithContentDescription("Complete Feed the dog").performTouchInput { click(center) }
+        compose.onNodeWithTag("balance").assertTextEquals("10 points")
     }
     @Test fun createChoreValidatesNameAndDisplaysSavedChore() {
         launch()

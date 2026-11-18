@@ -130,12 +130,12 @@ fun ChoreApp(state: ChoreState, save: (ChoreState) -> Unit) {
                                 }
                                 var earned = 0
                                 val error = change {
-                                    val next = state.complete(user, chore.id, day, today())
+                                    val next = if (done) state.uncomplete(user, chore.id, day, today()) else state.complete(user, chore.id, day, today())
                                     earned = next.person(user).points - person.points
                                     next
                                 }
-                                message(error ?: "Completed. +$earned points")
-                            }, enabled = !done, modifier = Modifier.size(48.dp).testTag("complete-${chore.id}").semantics { contentDescription = if (done) "${chore.title}, completed" else "Complete ${chore.title}" }) {
+                                message(error ?: if (done) "Unchecked. ${-earned} points removed" else "Completed. +$earned points")
+                            }, modifier = Modifier.size(48.dp).testTag("complete-${chore.id}").semantics { contentDescription = if (done) "Uncheck ${chore.title}" else "Complete ${chore.title}" }) {
                                 Canvas(Modifier.size(25.dp)) {
                                     drawCircle(if (done) Color.Black else Color(0xFFBEBEBE), style = if (done) androidx.compose.ui.graphics.drawscope.Fill else Stroke(3.dp.toPx()))
                                     if (done) { val p = Path(); p.moveTo(size.width * .26f, size.height * .5f); p.lineTo(size.width * .44f, size.height * .68f); p.lineTo(size.width * .75f, size.height * .33f); drawPath(p, Color.White, style = Stroke(2.dp.toPx())) }

@@ -67,6 +67,28 @@ data class ChoreState(
             completions = completions + Completion(choreId, day, user, earned)
         )
     }
+    fun uncomplete(user: String, choreId: String, day: Long, currentDay: Long): ChoreState {
+        val chore = chores.firstOrNull { it.id == choreId } ?: error("Chore not found.")
+        require(canView(user, chore.listId) && chore.assignee == user) { "You can only uncheck your own chores." }
+        require(day == currentDay) { "Only today's chores can be unchecked." }
+        val removed = completions.firstOrNull { it.choreId == choreId && it.day == day && it.userId == user } ?: return this
+        var remaining = completions - removed
+        // Keep the day's bonus on another completion if the day is still active.
+        val recipient = remaining.firstOrNull { it.userId == user && it.day == day }
+        val transferred = if (recipient != null) removed.earned - chore.points else 0
+        if (recipient != null && transferred > 0) {
+            remaining = remaining.map { if (it == recipient) it.copy(earned = it.earned + transferred) else it }
+        }
+        val deduction = removed.earned - transferred
+        require(person(user).points >= deduction) { "Can't uncheck: these points have already been spent." }
+        val activeDays = remaining.filter { it.userId == user }.map { it.day }.toSet()
+        val lastActive = activeDays.maxOrNull()
+        var streak = 0
+        if (lastActive != null) while (lastActive - streak in activeDays) streak++
+        return copy(completions = remaining, people = people.map {
+            if (it.id == user) it.copy(points = it.points - deduction, streak = streak, lastActive = lastActive) else it
+        })
+    }
     fun addReward(user: String, listId: String, title: String, cost: Int, minutes: Int = 0): ChoreState {
         require(canManage(user, listId)) { "Only the list manager can add rewards." }
         require(title.trim().length in 1..80) { "Enter a reward name (1–80 characters)." }

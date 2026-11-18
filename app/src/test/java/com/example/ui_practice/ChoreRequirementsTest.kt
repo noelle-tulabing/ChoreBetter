@@ -125,6 +125,43 @@ class ChoreRequirementsTest {
         val state = demo().createList("alex", "Private")
         rejected { state.addChore("alex", state.lists.last().id, "Chore", "sam", Frequency.DAILY, 10, day) }
     }
+    @Test fun uncheckRemovesCompletionPointsAndStreak() {
+        val original = demo()
+        val undone = original.complete("alex", "dog", day, day).uncomplete("alex", "dog", day, day)
+        assertEquals(original, undone)
+        assertEquals(undone, undone.uncomplete("alex", "dog", day, day))
+        assertEquals(10, undone.complete("alex", "dog", day, day).person("alex").points)
+    }
+    @Test fun uncheckTransfersBonusWhileAnotherChoreKeepsDayActive() {
+        var state = demo().complete("alex", "dog", day, day)
+        state = state.addChore("alex", "home", "Sweep", "alex", Frequency.DAILY, 20, day + 1)
+        val sweep = state.chores.last().id
+        state = state.complete("alex", "dog", day + 1, day + 1).complete("alex", sweep, day + 1, day + 1)
+        state = state.uncomplete("alex", "dog", day + 1, day + 1)
+        assertEquals(35, state.person("alex").points)
+        assertEquals(2, state.person("alex").streak)
+        assertEquals(25, state.completions.last().earned)
+        state = state.complete("alex", "dog", day + 1, day + 1)
+        assertEquals(45, state.person("alex").points)
+        state = state.uncomplete("alex", sweep, day + 1, day + 1).uncomplete("alex", "dog", day + 1, day + 1)
+        assertEquals(10, state.person("alex").points)
+        assertEquals(1, state.person("alex").streak)
+        assertEquals(day, state.person("alex").lastActive)
+    }
+    @Test fun uncheckDoesNotChangeOtherMembersOrOtherOccurrences() {
+        val state = demo().complete("alex", "dog", day, day).complete("noelle", "dishes", day, day)
+        rejected { state.uncomplete("noelle", "dog", day, day) }
+        rejected { state.uncomplete("alex", "dog", day, day + 1) }
+        val undone = state.uncomplete("alex", "dog", day, day)
+        assertEquals(state.person("noelle"), undone.person("noelle"))
+        assertTrue(undone.isDone("dishes", day))
+    }
+    @Test fun uncheckCannotEraseAlreadySpentPoints() {
+        val state = demo().complete("alex", "trash", day, day).redeem("alex", "dessert")
+        rejected { state.uncomplete("alex", "trash", day, day) }
+        assertEquals(0, state.person("alex").points)
+        assertTrue(state.isDone("trash", day))
+    }
     @Test fun localStorageRoundTripPreservesSharingCompletionAndWallet() {
         var state = demo().createList("alex", "Kitchen")
         state = state.share("alex", state.lists.last().id, "sam").complete("alex", "trash", day, day).redeem("alex", "dessert")
