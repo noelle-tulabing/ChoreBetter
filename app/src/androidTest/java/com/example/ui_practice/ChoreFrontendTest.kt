@@ -18,7 +18,7 @@ class ChoreFrontendTest {
     }
     @Test fun completeChoreAndRedeemReward() {
         launch()
-        compose.onNodeWithTag("complete-trash").performClick()
+        compose.onNodeWithTag("complete-trash").performTouchInput { click(center) }
         compose.onNodeWithTag("balance").assertTextEquals("20 points")
         compose.onNodeWithTag("complete-trash").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Rewards").performClick()
@@ -28,6 +28,29 @@ class ChoreFrontendTest {
         compose.onNodeWithTag("balance").assertTextEquals("0 points")
         compose.onNodeWithText("Your redeemed rewards").assertExists()
         compose.onNodeWithTag("redeem-dessert").assertIsNotEnabled()
+    }
+    @Test fun mineIsSelectedByDefaultAndEveryoneShowsOtherMembers() {
+        launch()
+        compose.onNodeWithText("Mine").assertIsSelected()
+        compose.onNodeWithText("Do the dishes").assertDoesNotExist()
+        val mine = compose.onNodeWithText("Mine").fetchSemanticsNode().boundsInRoot
+        val everyone = compose.onNodeWithText("Everyone").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(mine.left < everyone.left)
+        compose.onNodeWithText("Everyone").performClick()
+        compose.onNodeWithTag("complete-dishes").performTouchInput { click(center) }
+        compose.onNodeWithText("Only Noelle can complete this chore").assertExists()
+        compose.onNodeWithTag("balance").assertTextEquals("0 points")
+    }
+    @Test fun futureChoreExplainsRestrictionAndTodayRestoresCompletion() {
+        launch()
+        compose.onNodeWithContentDescription("Next week").performClick()
+        compose.onNodeWithTag("complete-dog").performTouchInput { click(center) }
+        compose.onNodeWithText("Choose Today to complete a chore").assertExists()
+        compose.onNodeWithTag("balance").assertTextEquals("0 points")
+        compose.onNodeWithTag("todayButton").performClick()
+        compose.onNodeWithTag("complete-dog").performTouchInput { click(center) }
+        compose.onNodeWithTag("balance").assertTextEquals("10 points")
+        compose.onNodeWithContentDescription("Feed the dog, completed").assertExists()
     }
     @Test fun createChoreValidatesNameAndDisplaysSavedChore() {
         launch()
